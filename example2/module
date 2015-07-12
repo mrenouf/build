@@ -1,0 +1,8 @@
+
+cc_executable(
+	name="baz",
+	sources=["main.c"],
+	cross='avr',
+	deps=["/example:foo", "/example:bar"]
+)
+	 
