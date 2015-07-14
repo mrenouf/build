@@ -70,9 +70,6 @@ class Module(object):
         eval_locals = {}
         execfile(self.root + '/' + self.path + '/' + 'module', self.eval_globals, eval_locals)
 
-def print_attrs(obj, attrs):
-    return [("%s=%r" % (attr, obj.__dict__[attr])) for attr in attrs]
-
 class BuildRule(object):
     def __init__(self, module, name, *args, **kwargs):
         self.module = module
@@ -86,8 +83,6 @@ class BuildRule(object):
     def add_output(self, output):
         self.outputs.append(output)
 
-    def __repr__(self):
-        return type(self).__name__ + "={" + ", ".join(print_attrs(self, ['name', 'tasks', 'outputs'])) + "}"
 
 class CcLibraryRule(BuildRule):
     def __init__(self, module, name, sources=[], static=False, cross=None, cflags=None, deps=None, *args, **kwargs):
@@ -142,9 +137,6 @@ class CcLibraryRule(BuildRule):
             fabricate.run([sharedlib])
             self.add_output(libfile)
 
-    def __repr__(self):
-        return type(self).__name__ + "(" + ", ".join(print_attrs(self, ['name', 'tasks', 'outputs', 'static'])) + ")"
-
 class CcBinaryRule(CcRule):
     def __init__(self, module, name, sources=[], cross=None, cflags=None, deps=None, *args, **kwargs):
         super(CcBinaryRule, self).__init__(module, name, sources, cross, cflags, deps, *args, **kwargs)
@@ -196,18 +188,6 @@ class CcBinaryRule(CcRule):
 
         fabricate.run([link])
         self.add_output(self.name)
-
-    def __repr__(self):
-        return type(self).__name__ + "(" + ", ".join(print_attrs(self, ['name', 'tasks', 'outputs', 'static'])) + ")"
-
-
-def build_host(sources):
-    compile()
-    link()
-
-def build_target():
-    compile()
-    link()
 
 def build():
     eval_targets(build.targets)
@@ -261,10 +241,6 @@ def eval_target(target, relpath=None, modules={}, queue=[]):
                 rule.deprules[dep] = deptarget
         rule.execute()
     return rule
-
-            
-def clean():
-    autoclean()
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
