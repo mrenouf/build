@@ -76,6 +76,7 @@ class BuildRule(object):
         self.name = name
         self.deps = []
         self.outputs = []
+        self.executed = False
 
     def add_task(self, command):
         self.tasks.append(command)
@@ -83,8 +84,51 @@ class BuildRule(object):
     def add_output(self, output):
         self.outputs.append(output)
 
+    def execute(self):
+        if not self.executed:
+            self.do_execute()
+        self.executed = True
 
-class CcLibraryRule(BuildRule):
+    def mkdirs(self, path):
+        # Uses a shell conditional so fabricate can see the target dir as an input
+        fabricate.run([['/bin/sh', '-c', '[ -d ' + path + ' ] || mkdir -p ' + path]], echo="MKDIR %s " % (path))
+
+class CcRule(BuildRule):
+    def __init__(self, module, name, sources=[], static=False, cross=None, cflags=None, deps=None, *args, **kwargs):
+        super(CcRule, self).__init__(module, name, sources, static, cross, cflags, deps, *args, **kwargs)
+        self.outputs = []
+        self.sources = sources
+        self.static = static
+        self.cross = cross
+        self.cflags = cflags
+        self.deps = deps
+        self.deprules = {}
+        self.outfiles = None
+        self.objfiles = []
+
+    def init(self):
+        self.indir = os.path.relpath(BUILDROOT + self.module.path)
+        self.outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
+        self.cc = cross_tool('gcc', self.cross)
+        self.ar = cross_tool('ar', self.cross)
+        self.mkdirs(self.outdir)
+
+    # TODO need to add header paths
+    def compile(self, source):
+        compile = [self.cc]
+        srcfile = os.path.join(self.indir, source)
+        objfile = os.path.join(self.outdir, replace_ext(source, 'o'))
+        if self.cflags is not None:
+            compile.extend(expand_make_vars(self.cflags, MAKE_VARS).split(" "))
+        if not self.static:
+            compile.append('-fpic')
+        compile.extend(['-c', srcfile])
+        compile.extend(['-o', objfile])
+        self.objfiles.append(objfile)
+        fabricate.run([compile], echo="COMPILE %s " % (os.path.basename(objfile)))
+
+
+class CcLibraryRule(CcRule):
     def __init__(self, module, name, sources=[], static=False, cross=None, cflags=None, deps=None, *args, **kwargs):
         super(CcLibraryRule, self).__init__(module, name, sources, static, cross, cflags, deps, *args, **kwargs)
         self.deps = []
@@ -99,42 +143,28 @@ class CcLibraryRule(BuildRule):
         self.outfiles = None
         self.executed = False
 
-    def execute(self):
-        indir = os.path.relpath(BUILDROOT + self.module.path)
-        outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
-        outfile = os.path.join(outdir, self.name + '.a')
+    def do_execute(self):
+        self.init()
+        outfile = os.path.join(self.outdir, self.name + '.a')
         objfiles = []
         tasks = []
 
-        cc = cross_tool('gcc', self.cross)
-        ar = cross_tool('ar', self.cross)
-
-        # Use shell conditional so fabricate can save the target dir as an input
-        fabricate.run([['/bin/sh', '-c', '[ -d ' + outdir + ' ] || mkdir -p ' + outdir]])
+        # TODO add headers of dependency libraries
         for source in self.sources:
-            compile = [cc]
-            srcfile = os.path.join(indir, source)
-            objfile = os.path.join(outdir, replace_ext(source, 'o'))
-            if self.cflags is not None:
-                compile.extend(expand_make_vars(self.cflags, MAKE_VARS).split(" "))
-            if not self.static:
-                compile.append('-fpic')
-            compile.extend(['-c', srcfile])
-            compile.extend(['-o', objfile])
-            objfiles.append(objfile)
-            fabricate.run([compile])
+            self.compile(source)
 
+        # TODO handle library <- library dependencies
         if self.static:
-            libfile = os.path.join(outdir, self.name + '.a')
-            archive = [ar, 'rc', os.path.join(outdir, self.name + '.a')]
+            libfile = os.path.join(self.outdir, self.name + '.a')
+            archive = [self.ar, 'rc', os.path.join(self.outdir, self.name + '.a')]
             archive.extend(objfiles)
-            fabricate.run([archive])
+            fabricate.run([archive], echo="LIBRARY %s" % (os.path.basename(libfile)))
             self.add_output([libfile])
         else:
-            libfile = os.path.join(outdir, 'lib' + self.name + '.so')
-            sharedlib = [cc, '-shared', '-o', libfile]
-            sharedlib.extend(objfiles)
-            fabricate.run([sharedlib])
+            libfile = os.path.join(self.outdir, 'lib' + self.name + '.so')
+            sharedlib = [self.cc, '-shared', '-o', libfile]
+            sharedlib.extend(self.objfiles)
+            fabricate.run([sharedlib], echo="SHARED %s" % (os.path.basename(libfile)))
             self.add_output(libfile)
 
 class CcBinaryRule(CcRule):
@@ -147,31 +177,20 @@ class CcBinaryRule(CcRule):
         self.outputs = []
         self.deprules = {}
 
-    def execute(self):
-        indir =  os.path.relpath(BUILDROOT + os.path.normpath(os.path.join(self.module.path)))
-        outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
-        outfile = os.path.join(outdir, self.name)
+    def do_execute(self):
+        self.init()
+        self.indir =  os.path.relpath(BUILDROOT + os.path.normpath(os.path.join(self.module.path)))
+        self.outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
+        outfile = os.path.join(self.outdir, self.name)
         objfiles = []
         tasks = []
 
-        cc = cross_tool('gcc', self.cross)
-        ar = cross_tool('ar', self.cross)
-
-        # Use shell conditional so fabricate can save the target dir as an input
-        fabricate.run([['/bin/sh', '-c', '[ -d ' + outdir + ' ] || mkdir -p ' + outdir]])
+        # TODO add headers of dependency libraries
         for source in self.sources:
-            compile = [cc]
-            srcfile = os.path.join(indir, source)
-            objfile = os.path.join(outdir, replace_ext(source, 'o'))
-            if self.cflags is not None:
-                compile.extend(expand_make_vars(self.cflags, MAKE_VARS).split(" "))
-            compile.extend(['-c', srcfile])
-            compile.extend(['-o', objfile])
-            objfiles.append(objfile)
-            fabricate.run([compile])
+            self.compile(source)
 
-        link = [cc]
-        link.extend(['-o', os.path.join(outdir, self.name)])
+        link = [self.cc]
+        link.extend(['-o', os.path.join(self.outdir, self.name)])
         link.extend(objfiles)
 
         for dep in self.deprules.values():
@@ -185,8 +204,10 @@ class CcBinaryRule(CcRule):
                     for d in dirs.keys():
                         link.extend(['-L' + d])
                     link.extend(['-l' + dep.name])
+            else:
+                raise ValueError("Unsupported dependency type %s" % (type(dep)))
 
-        fabricate.run([link])
+        fabricate.run([link], echo="LINK %s" % (os.path.basename(self.name)))
         self.add_output(self.name)
 
 def build():
