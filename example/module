@@ -15,7 +15,7 @@ cc_library(
   cflags="-I/usr/lib/avr/include -D__AVR_ATmega2560__ -DF_CPU=$(AVR_FREQ)"
 )
 
-cc_executable(
+cc_binary(
   name="baz",
   sources=["main.c"],
   cross='avr',

@@ -52,7 +52,7 @@ class Module(object):
         # the only required argument in the build file function is 'name'
         self.funcmap = {
             'cc_library': CcLibraryRule,
-            'cc_executable': CcExecutableRule,
+            'cc_binary': CcBinaryRule,
         }
 
         def make_call(module, classname, ruleclass):
@@ -145,10 +145,9 @@ class CcLibraryRule(BuildRule):
     def __repr__(self):
         return type(self).__name__ + "(" + ", ".join(print_attrs(self, ['name', 'tasks', 'outputs', 'static'])) + ")"
 
-
-class CcExecutableRule(BuildRule):
+class CcBinaryRule(CcRule):
     def __init__(self, module, name, sources=[], cross=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcExecutableRule, self).__init__(module, name, sources, cross, cflags, deps, *args, **kwargs)
+        super(CcBinaryRule, self).__init__(module, name, sources, cross, cflags, deps, *args, **kwargs)
         self.sources = sources
         self.cross = cross
         self.cflags = cflags
