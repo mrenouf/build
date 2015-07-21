@@ -171,13 +171,13 @@ class CcLibraryRule(CcRule):
             libfile = os.path.join(self.outdir, self.name + '.a')
             archive = [self.ar, 'rc', os.path.join(self.outdir, self.name + '.a')]
             archive.extend(objfiles)
-            fabricate.run([archive], echo="LIBRARY %s" % (os.path.basename(libfile)))
+            fabricate.run([archive])
             self.add_output([libfile])
         else:
             libfile = os.path.join(self.outdir, 'lib' + self.name + '.so')
             sharedlib = [self.cc, '-shared', '-o', libfile]
             sharedlib.extend(self.objfiles)
-            fabricate.run([sharedlib], echo="SHARED %s" % (os.path.basename(libfile)))
+            fabricate.run([sharedlib])
             self.add_output(libfile)
 
 class CcBinaryRule(CcRule):
@@ -218,7 +218,7 @@ class CcBinaryRule(CcRule):
             else:
                 raise ValueError("Unsupported dependency type %s" % (type(dep)))
 
-        fabricate.run([link], echo="LINK %s" % (os.path.basename(self.name)))
+        fabricate.run([link])
         self.add_output(self.name)
 
 def build():
