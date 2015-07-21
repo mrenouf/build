@@ -1,9 +1,12 @@
+avr_cpu = 'mega2560'
+avr_clock = 16000000
+
 cc_library(
   name="foo",
   static=True,
   sources=["foo.c"],
   abi='avr',
-  cflags="-I/usr/lib/avr/include -D__AVR_ATmega2560__ -DF_CPU=$(AVR_FREQ)",
+  cflags="-I/usr/lib/avr/include -D__AVR_AT%s__ -DF_CPU=%d" % (avr_cpu, avr_clock),
   deps=[":bar"]
 )
 
@@ -12,7 +15,7 @@ cc_library(
   static=False,
   sources=["bar.c"],
   abi='avr',
-  cflags="-I/usr/lib/avr/include -D__AVR_ATmega2560__ -DF_CPU=$(AVR_FREQ)"
+  cflags="-I/usr/lib/avr/include -D__AVR_AT%s__ -DF_CPU=%d" % (avr_cpu, avr_clock),
 )
 
 cc_binary(
