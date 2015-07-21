@@ -39,7 +39,7 @@ def expand_make_vars(text, values={}):
         try:
             return values[m.group(1)]
         except KeyError as e:
-            raise ValueError('Undefined variable %s' % text)
+            raise ValueError('Undefined variable "%s" in "%s"' % (m.group(1), text))
     return RE_MAKE_VAR.sub(repl, text)
 
 def replace_ext(fname, ext):
