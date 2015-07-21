@@ -7,8 +7,9 @@ import argparse
 import fabricate
 from optparse import make_option
 import os
-import shutil
 import re
+import shutil
+import subprocess
 
 
 RE_MAKE_VAR = re.compile(r'\$\(([A-Za-z0-9_-]+)\)')
@@ -19,6 +20,19 @@ MAKE_VARS = {'AVR_CHIP': 'atmega328p', 'AVR_FREQ': '12000000'}
 
 # TODO, make this more flexible
 BUILDROOT = os.path.dirname(os.path.realpath(__file__))
+
+def get_gcc_target_machine(gcc='gcc'):
+    try:
+        return subprocess.check_output([gcc, '-dumpmachine'], shell=False).strip()
+    except subprocess.CalledProcessError as e:
+        print "Error: failed to identify machine type for toolchain '%s': %s" % (gcc, e.message)
+        raise e
+    except OSError as e:
+        print "Error: failed to identify machine type for toolchain: '%s': %s" % (gcc, e.message)
+        raise e
+
+
+HOST_ABI = get_gcc_target_machine('gcc')
 
 def expand_make_vars(text, values={}):
     def repl(m):
