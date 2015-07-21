@@ -190,8 +190,6 @@ class CcBinaryRule(CcRule):
 
     def do_execute(self):
         self.init()
-        self.indir =  os.path.relpath(BUILDROOT + os.path.normpath(os.path.join(self.module.path)))
-        self.outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
         outfile = os.path.join(self.outdir, self.name)
         objfiles = []
         tasks = []
