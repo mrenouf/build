@@ -105,26 +105,27 @@ class BuildRule(object):
 
     def mkdirs(self, path):
         # Uses a shell conditional so fabricate can see the target dir as an input
-        fabricate.run([['/bin/sh', '-c', '[ -d ' + path + ' ] || mkdir -p ' + path]], echo="MKDIR %s " % (path))
+        fabricate.run([['/bin/sh', '-c', '[ -d ' + path + ' ] || mkdir -p ' + path]], echo="mkdir -p %s" % (path))
 
 class CcRule(BuildRule):
-    def __init__(self, module, name, sources=[], static=False, cross=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcRule, self).__init__(module, name, sources, static, cross, cflags, deps, *args, **kwargs)
+    def __init__(self, module, name, static=False, abi=None, cflags=None, deps=None, *args, **kwargs):
+        super(CcRule, self).__init__(module, name, static, cflags, deps, abi=abi, *args, **kwargs)
         self.outputs = []
-        self.sources = sources
         self.static = static
-        self.cross = cross
         self.cflags = cflags
         self.deps = deps
         self.deprules = {}
         self.outfiles = None
         self.objfiles = []
+        self.abi = abi
 
     def init(self):
         self.indir = os.path.relpath(BUILDROOT + self.module.path)
         self.outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
-        self.cc = cross_tool('gcc', self.cross)
-        self.ar = cross_tool('ar', self.cross)
+        if self.abi is None:
+            self.abi = HOST_ABI
+        self.cc = '%s-gcc' % (self.abi)
+        self.ar = '%s-ar' % (self.abi)
         self.mkdirs(self.outdir)
 
     # TODO need to add header paths
@@ -139,20 +140,17 @@ class CcRule(BuildRule):
         compile.extend(['-c', srcfile])
         compile.extend(['-o', objfile])
         self.objfiles.append(objfile)
-        fabricate.run([compile], echo="COMPILE %s " % (os.path.basename(objfile)))
+        fabricate.run([compile])
 
 
 class CcLibraryRule(CcRule):
-    def __init__(self, module, name, sources=[], static=False, cross=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcLibraryRule, self).__init__(module, name, sources, static, cross, cflags, deps, *args, **kwargs)
+    def __init__(self, module, name, sources=[], static=False, cflags=None, *args, **kwargs):
+        super(CcLibraryRule, self).__init__(module, name, *args, **kwargs)
         self.deps = []
         self.outputs = []
         self.sources = sources
         self.static = static
-        self.cross = cross
-        self.deps = deps
         self.cflags = cflags
-        self.deps = deps
         self.deprules = {}
         self.outfiles = None
         self.executed = False
@@ -182,12 +180,10 @@ class CcLibraryRule(CcRule):
             self.add_output(libfile)
 
 class CcBinaryRule(CcRule):
-    def __init__(self, module, name, sources=[], cross=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcBinaryRule, self).__init__(module, name, sources, cross, cflags, deps, *args, **kwargs)
+    def __init__(self, module, name, sources=[], cflags=None, *args, **kwargs):
+        super(CcBinaryRule, self).__init__(module, name, *args, **kwargs)
         self.sources = sources
-        self.cross = cross
         self.cflags = cflags
-        self.deps = deps
         self.outputs = []
         self.deprules = {}
 

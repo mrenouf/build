@@ -2,7 +2,7 @@ cc_library(
   name="foo",
   static=True,
   sources=["foo.c"],
-  cross='avr',
+  abi='avr',
   cflags="-I/usr/lib/avr/include -D__AVR_ATmega2560__ -DF_CPU=$(AVR_FREQ)",
   deps=[":bar"]
 )
@@ -11,14 +11,14 @@ cc_library(
   name="bar",
   static=False,
   sources=["bar.c"],
-  cross='avr',
+  abi='avr',
   cflags="-I/usr/lib/avr/include -D__AVR_ATmega2560__ -DF_CPU=$(AVR_FREQ)"
 )
 
 cc_binary(
   name="baz",
   sources=["main.c"],
-  cross='avr',
+  abi='avr',
   deps=[":foo", ":bar"]
 )
 
