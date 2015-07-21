@@ -202,19 +202,20 @@ class CcBinaryRule(CcRule):
         link.extend(['-o', os.path.join(self.outdir, self.name)])
         link.extend(objfiles)
 
-        for dep in self.deprules.values():
-            if type(dep) is CcLibraryRule:
-                if dep.static == True:
-                    link.extend(dep.outputs)
+        for deps in self.deprules.values():
+            for dep in deps:
+                if type(dep) is CcLibraryRule:
+                    if dep.static == True:
+                        link.extend(dep.outputs)
+                    else:
+                        dirs = {}
+                        for out in dep.outputs:
+                            dirs[os.path.dirname(out)] = 1
+                        for d in dirs.keys():
+                            link.extend(['-L' + d])
+                        link.extend(['-l' + dep.name])
                 else:
-                    dirs = {}
-                    for out in dep.outputs:
-                        dirs[os.path.dirname(out)] = 1
-                    for d in dirs.keys():
-                        link.extend(['-L' + d])
-                    link.extend(['-l' + dep.name])
-            else:
-                raise ValueError("Unsupported dependency type %s" % (type(dep)))
+                    raise ValueError("Unsupported dependency type %s" % (type(dep)))
 
         fabricate.run([link])
         self.add_output(self.name)
@@ -257,8 +258,10 @@ def eval_target(target, relpath=None, modules={}, queue=[]):
             raise ValueError('module %s does not exist' % (path))    
         modules[path] = module
     if rulename is None or rulename is "" or rulename == "all":
+        deptargets = []
         for rule in module.rules.keys():
-            eval_target(':' + rule, path, modules, queue)
+            deptargets.extend(eval_target(':' + rule, path, modules, queue))
+	return deptargets
     else:
         try:
             rule = module.rules[rulename]
@@ -267,10 +270,10 @@ def eval_target(target, relpath=None, modules={}, queue=[]):
         if rule.deps is not None:
             # TODO: detect and abort on circular dependencies
             for dep in rule.deps:
-                deptarget = eval_target(dep, path, modules, queue)
-                rule.deprules[dep] = deptarget
+                deptargets = eval_target(dep, path, modules, queue)
+                rule.deprules[dep] = deptargets
         rule.execute()
-    return rule
+    return [rule]
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
