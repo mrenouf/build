@@ -100,8 +100,9 @@ class BuildRule(object):
 
     def execute(self):
         if not self.executed:
+            self.executed = True
+	    print "\nBuilding %s:%s" % (self.module.path, self.name)
             self.do_execute()
-        self.executed = True
 
     def mkdirs(self, path):
         # Uses a shell conditional so fabricate can see the target dir as an input
