@@ -1,5 +1,5 @@
 
-cc_executable(
+cc_binary(
 	name="baz",
 	sources=["main.c"],
 	cross='avr',
