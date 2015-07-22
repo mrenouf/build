@@ -190,7 +190,7 @@ class CcLibraryRule(CcRule):
         if self.static:
             libfile = os.path.join(self.outdir, self.name + '.a')
             archive = [self.ar, 'rc', os.path.join(self.outdir, self.name + '.a')]
-            archive.extend(objfiles)
+            archive.extend(self.objfiles)
             fabricate.run([archive])
             self.add_output([libfile])
         else:
