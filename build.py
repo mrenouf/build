@@ -11,6 +11,8 @@ import re
 import shutil
 import subprocess
 
+# Build rule classes
+from rules import RULE_CLASSES
 
 RE_MAKE_VAR = re.compile(r'\$\(([A-Za-z0-9_-]+)\)')
 RE_TARGET = re.compile(r'^(\/?(?:[0-9A-Za-z_]+)(?:(?:\/[0-9A-Za-z_]+)*))?(?:\:([0-9A-Za-z_]+))?$')
@@ -42,11 +44,6 @@ def expand_make_vars(text, values={}):
             raise ValueError('Undefined variable "%s" in "%s"' % (m.group(1), text))
     return RE_MAKE_VAR.sub(repl, text)
 
-def replace_ext(fname, ext):
-    return os.path.splitext(fname)[0] + '.' + ext
-
-def file_ext(fname):
-    return os.path.splitext(fname)[1]
 
 def cross_tool(tool, cross):
     if cross is None:
@@ -55,27 +52,22 @@ def cross_tool(tool, cross):
         cross = cross[:-1]
     return "%s-%s" % (cross, tool)
 
+
 class Module(object):
     def __init__(self, path, root=BUILDROOT):
         self.root = root
         self.path = path
         self.rules = {}
         self.eval_globals = {}
-
-        # maps build file functions to a class to construct
-        # the only required argument in the build file function is 'name'
-        self.funcmap = {
-            'cc_library': CcLibraryRule,
-            'cc_binary': CcBinaryRule,
-        }
+        self.buildroot = BUILDROOT
 
         def make_call(module, classname, ruleclass):
             def call(name, *args, **kwargs):
                 self.rules[name] = ruleclass(module, name, *args, **kwargs)
             return call
 
-        for classname in self.funcmap.keys():
-            self.eval_globals[classname] = make_call(self, classname, self.funcmap[classname])
+        for classname in RULE_CLASSES.keys():
+            self.eval_globals[classname] = make_call(self, classname, RULE_CLASSES[classname])
 
     def __repr__(self):
         return type(self).__name__ + "(" + ", ".join(print_attrs(self, ['path', 'rules'])) + ")"
@@ -84,142 +76,6 @@ class Module(object):
         eval_locals = {}
         execfile(self.root + '/' + self.path + '/' + 'module', self.eval_globals, eval_locals)
 
-class BuildRule(object):
-    def __init__(self, module, name, *args, **kwargs):
-        self.module = module
-        self.name = name
-        self.deps = []
-        self.outputs = []
-        self.executed = False
-
-    def add_task(self, command):
-        self.tasks.append(command)
-
-    def add_output(self, output):
-        self.outputs.append(output)
-
-    def execute(self):
-        if not self.executed:
-            self.executed = True
-	    print "\nBuilding %s:%s" % (self.module.path, self.name)
-            self.do_execute()
-
-    def mkdirs(self, path):
-        # Uses a shell conditional so fabricate can see the target dir as an input
-        fabricate.run([['/bin/sh', '-c', '[ -d ' + path + ' ] || mkdir -p ' + path]], echo="mkdir -p %s" % (path))
-
-class CcRule(BuildRule):
-    def __init__(self, module, name, static=False, abi=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcRule, self).__init__(module, name, static, cflags, deps, abi=abi, *args, **kwargs)
-        self.outputs = []
-        self.static = static
-        self.cflags = cflags
-        self.deps = deps
-        self.deprules = {}
-        self.outfiles = None
-        self.objfiles = []
-        self.abi = abi
-
-    def init(self):
-        self.indir = os.path.relpath(BUILDROOT + self.module.path)
-        self.outdir = os.path.relpath(BUILDROOT + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
-        if self.abi is None:
-            self.abi = HOST_ABI
-        self.cc = '%s-gcc' % (self.abi)
-        self.ar = '%s-ar' % (self.abi)
-        self.mkdirs(self.outdir)
-
-    # TODO need to add header paths
-    def compile(self, source):
-        compile = [self.cc]
-        srcfile = os.path.join(self.indir, source)
-        objfile = os.path.join(self.outdir, replace_ext(source, 'o'))
-        if self.cflags is not None:
-            compile.extend(expand_make_vars(self.cflags, MAKE_VARS).split(" "))
-        if not self.static:
-            compile.append('-fpic')
-        compile.extend(['-c', srcfile])
-        compile.extend(['-o', objfile])
-        self.objfiles.append(objfile)
-        fabricate.run([compile])
-
-    def link(self, target, objfiles=[]):
-        link = [self.cc]
-        link.extend(self.ldflags.split(" "))
-        link.extend(['-o', target])
-        link.extend(self.objfiles)
-        for deps in self.deprules.values():
-            for dep in deps:
-                if isinstance(dep, CcLibraryRule):
-                    if dep.static == True:
-                        link.extend(dep.outputs)
-                    else:
-                        dirs = {}
-                        for out in dep.outputs:
-                            dirs[os.path.dirname(out)] = 1
-                        for d in dirs.keys():
-                            link.extend(['-L' + d])
-                        link.extend(['-l' + dep.name])
-                else:
-                    raise ValueError("Unsupported dependency type %s" % (type(dep)))
-        fabricate.run([link])
-
-class CcLibraryRule(CcRule):
-    def __init__(self, module, name, sources=[], static=False, cflags=None, *args, **kwargs):
-        super(CcLibraryRule, self).__init__(module, name, *args, **kwargs)
-        self.deps = []
-        self.outputs = []
-        self.sources = sources
-        self.static = static
-        self.cflags = cflags
-        self.deprules = {}
-        self.outfiles = None
-        self.executed = False
-
-    def do_execute(self):
-        self.init()
-        outfile = os.path.join(self.outdir, self.name + '.a')
-        objfiles = []
-        tasks = []
-
-        # TODO add headers of dependency libraries
-        for source in self.sources:
-            self.compile(source)
-
-        # TODO handle library <- library dependencies
-        if self.static:
-            libfile = os.path.join(self.outdir, self.name + '.a')
-            archive = [self.ar, 'rc', os.path.join(self.outdir, self.name + '.a')]
-            archive.extend(self.objfiles)
-            fabricate.run([archive])
-            self.add_output([libfile])
-        else:
-            libfile = os.path.join(self.outdir, 'lib' + self.name + '.so')
-            sharedlib = [self.cc, '-shared', '-o', libfile]
-            sharedlib.extend(self.objfiles)
-            fabricate.run([sharedlib])
-            self.add_output(libfile)
-
-class CcBinaryRule(CcRule):
-    def __init__(self, module, name, sources=[], ldflags=None, *args, **kwargs):
-        super(CcBinaryRule, self).__init__(module, name, *args, **kwargs)
-        self.sources = sources
-        self.ldflags = ldflags
-        self.outputs = []
-        self.deprules = {}
-
-    def do_execute(self):
-        self.init()
-        outfile = os.path.join(self.outdir, self.name)
-        objfiles = []
-        tasks = []
-
-        # TODO add headers of dependency libraries
-        for source in self.sources:
-            self.compile(source)
-
-        self.link(os.path.join(self.outdir, self.name), objfiles)
-        self.add_output(self.name)
 
 def build():
     eval_targets(build.targets)

@@ -6,8 +6,7 @@ cc_library(
   static=True,
   sources=["foo.c"],
   abi='avr',
-  cflags="-I/usr/lib/avr/include -mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock),
-  deps=[":bar"]
+  cflags="-mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock)
 )
 
 cc_library(
@@ -15,7 +14,8 @@ cc_library(
   static=True,
   sources=["bar.c"],
   abi='avr',
-  cflags="-I/usr/lib/avr/include -mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock),
+  cflags="-mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock),
+  deps=[":foo"]
 )
 
 cc_binary(
@@ -23,8 +23,8 @@ cc_binary(
   sources=["main.c"],
   static=True,
   abi='avr',
-  cflags="-I/usr/lib/avr/include -mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock),
+  cflags="-mmcu=%s -DF_CPU=%d" % (avr_cpu, avr_clock),
   ldflags="-g -mmcu=%s" % (avr_cpu),
-  deps=[":foo", ":bar"]
+  deps=[":bar"]
 )
 
