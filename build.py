@@ -143,6 +143,26 @@ class CcRule(BuildRule):
         self.objfiles.append(objfile)
         fabricate.run([compile])
 
+    def link(self, target, objfiles=[]):
+        link = [self.cc]
+        link.extend(self.ldflags.split(" "))
+        link.extend(['-o', target])
+        link.extend(self.objfiles)
+        for deps in self.deprules.values():
+            for dep in deps:
+                if isinstance(dep, CcLibraryRule):
+                    if dep.static == True:
+                        link.extend(dep.outputs)
+                    else:
+                        dirs = {}
+                        for out in dep.outputs:
+                            dirs[os.path.dirname(out)] = 1
+                        for d in dirs.keys():
+                            link.extend(['-L' + d])
+                        link.extend(['-l' + dep.name])
+                else:
+                    raise ValueError("Unsupported dependency type %s" % (type(dep)))
+        fabricate.run([link])
 
 class CcLibraryRule(CcRule):
     def __init__(self, module, name, sources=[], static=False, cflags=None, *args, **kwargs):
@@ -181,10 +201,10 @@ class CcLibraryRule(CcRule):
             self.add_output(libfile)
 
 class CcBinaryRule(CcRule):
-    def __init__(self, module, name, sources=[], cflags=None, *args, **kwargs):
+    def __init__(self, module, name, sources=[], ldflags=None, *args, **kwargs):
         super(CcBinaryRule, self).__init__(module, name, *args, **kwargs)
         self.sources = sources
-        self.cflags = cflags
+        self.ldflags = ldflags
         self.outputs = []
         self.deprules = {}
 
@@ -198,26 +218,7 @@ class CcBinaryRule(CcRule):
         for source in self.sources:
             self.compile(source)
 
-        link = [self.cc]
-        link.extend(['-o', os.path.join(self.outdir, self.name)])
-        link.extend(objfiles)
-
-        for deps in self.deprules.values():
-            for dep in deps:
-                if type(dep) is CcLibraryRule:
-                    if dep.static == True:
-                        link.extend(dep.outputs)
-                    else:
-                        dirs = {}
-                        for out in dep.outputs:
-                            dirs[os.path.dirname(out)] = 1
-                        for d in dirs.keys():
-                            link.extend(['-L' + d])
-                        link.extend(['-l' + dep.name])
-                else:
-                    raise ValueError("Unsupported dependency type %s" % (type(dep)))
-
-        fabricate.run([link])
+        self.link(os.path.join(self.outdir, self.name), objfiles)
         self.add_output(self.name)
 
 def build():
