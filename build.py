@@ -20,9 +20,6 @@ RE_TARGET = re.compile(r'^(\/?(?:[0-9A-Za-z_]+)(?:(?:\/[0-9A-Za-z_]+)*))?(?:\:([
 # TODO, make these args of build.py
 MAKE_VARS = {'AVR_CHIP': 'atmega328p', 'AVR_FREQ': '12000000'}
 
-# TODO, make this more flexible
-BUILDROOT = os.path.dirname(os.path.realpath(__file__))
-
 def get_gcc_target_machine(gcc='gcc'):
     try:
         return subprocess.check_output([gcc, '-dumpmachine'], shell=False).strip()
@@ -35,6 +32,10 @@ def get_gcc_target_machine(gcc='gcc'):
 
 
 HOST_ABI = get_gcc_target_machine('gcc')
+BUILDROOT = os.path.dirname(os.path.realpath(__file__))
+
+os.environ['BUILDROOT'] = BUILDROOT
+os.environ['HOST_ABI'] = HOST_ABI
 
 def expand_make_vars(text, values={}):
     def repl(m):
@@ -124,11 +125,10 @@ def eval_target(target, relpath=None, modules={}, queue=[]):
             rule = module.rules[rulename]
         except KeyError:
             raise ValueError('in %s: target %s could not be resolved' % (path + '/' + 'module', module.path + ':' + rulename))    
-        if rule.deps is not None:
-            # TODO: detect and abort on circular dependencies
-            for dep in rule.deps:
-                deptargets = eval_target(dep, path, modules, queue)
-                rule.deprules[dep] = deptargets
+        # TODO: detect and abort on circular dependencies
+        for dep in rule.deps:
+            deptargets = eval_target(dep, path, modules, queue)
+            rule.deprules[dep] = deptargets
         rule.execute()
     return [rule]
 
