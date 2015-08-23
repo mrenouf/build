@@ -1,4 +1,5 @@
+#include "example/foo.h"
 
 int bar() {
-  return 12;
+  return foo();
 }

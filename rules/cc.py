@@ -8,19 +8,12 @@ from core import BuildRule
 from util import replace_ext
 
 class CcRule(BuildRule):
-    ABI_CFLAGS = {
-        'avr': '-Os -g -std=gnu99 -Wall -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffunction-sections -fdata-sections'
-    }
-
-    ABI_LDFLAGS = {
-        'avr': '-Wl,-Map,$(TARGET).map -Wl,--gc-sections'
-    }
-
-    def __init__(self, module, name, static=False, abi=None, cflags=None, deps=None, *args, **kwargs):
-        super(CcRule, self).__init__(module, name, static, cflags, deps, abi=abi, *args, **kwargs)
+    def __init__(self, module, name, static=False, abi=None, cflags=[], ldflags=[], deps=[], *args, **kwargs):
+        super(CcRule, self).__init__(module, name, deps, *args, **kwargs)
         self.outputs = []
         self.static = static
         self.cflags = cflags
+        self.ldflags = ldflags
         self.deps = deps
         self.deprules = {}
         self.objfiles = []
@@ -30,7 +23,7 @@ class CcRule(BuildRule):
         self.indir = os.path.relpath(self.module.buildroot + self.module.path)
         self.outdir = os.path.relpath(self.module.buildroot + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
         if self.abi is None:
-            self.abi = HOST_ABI
+            self.abi = os.environ['HOST_ABI']
         self.cc = '%s-gcc' % (self.abi)
         self.ar = '%s-ar' % (self.abi)
         self.mkdirs(self.outdir)
@@ -38,7 +31,7 @@ class CcRule(BuildRule):
     def compile(self, source):
         compile = [self.cc]
         compile.extend(["-I" + self.module.buildroot])
-        compile.extend(self.cflags.split(" "))
+        compile.extend(self.cflags)
         #compile.extend(self.ABI_CFLAGS[self.abi].split(" "))
         srcfile = os.path.join(self.indir, source)
         objfile = os.path.join(self.outdir, replace_ext(source, 'o'))
@@ -51,39 +44,11 @@ class CcRule(BuildRule):
         self.objfiles.append(objfile)
         fabricate.run([compile])
 
-    def link(self, target, objfiles=[]):
-        link = [self.cc]
-        link.extend(self.ldflags.split(" "))
-        #???
-        #link.extend(self.ABI_LDFLAGS[self.abi].split(" "))
-	
-        link.extend(['-o', target])
-        link.extend(self.objfiles)
-        for deps in self.deprules.values():
-            for dep in deps:
-                if isinstance(dep, CcLibraryRule):
-                    if dep.static == True:
-                        link.extend(dep.outputs)
-                    else:
-                        dirs = {}
-                        for out in dep.outputs:
-                            dirs[os.path.dirname(out)] = 1
-                        for d in dirs.keys():
-                            link.extend(['-L' + d])
-                        link.extend(['-l' + dep.name])
-                else:
-                    raise ValueError("Unsupported dependency type %s" % (type(dep)))
-        fabricate.run([link])
-
 
 class CcLibraryRule(CcRule):
-    def __init__(self, module, name, sources=[], static=False, cflags=None, *args, **kwargs):
-        super(CcLibraryRule, self).__init__(module, name, *args, **kwargs)
-        self.outputs = []
+    def __init__(self, module, name, sources, static=False, abi=None, cflags=[], deps=[], *args, **kwargs):
+        super(CcLibraryRule, self).__init__(module, name, static, abi, cflags, ldflags=[], deps=deps, *args, **kwargs)
         self.sources = sources
-        self.static = static
-        self.cflags = cflags
-        self.deprules = {}
         self.executed = False
 
     def do_execute(self):
@@ -117,12 +82,9 @@ class CcLibraryRule(CcRule):
 
 
 class CcBinaryRule(CcRule):
-    def __init__(self, module, name, sources=[], ldflags=None, *args, **kwargs):
-        super(CcBinaryRule, self).__init__(module, name, *args, **kwargs)
+    def __init__(self, module, name, sources=[], static=False, abi=None, cflags=[], ldflags=[], deps=[], *args, **kwargs):
+        super(CcBinaryRule, self).__init__(module, name, static, abi, cflags, ldflags, deps, *args, **kwargs)
         self.sources = sources
-        self.ldflags = ldflags
-        self.outputs = []
-        self.deprules = {}
 
     def do_execute(self):
         self.init()
@@ -131,8 +93,29 @@ class CcBinaryRule(CcRule):
         tasks = []
         for source in self.sources:
             self.compile(source)
-        self.link(os.path.join(self.outdir, self.name), objfiles)
+        self.link(outfile, self.ldflags, objfiles)
         self.add_output(self.name)
 
+    def link(self, target, ldflags, objfiles=[]):
+        link = [self.cc]
+        link.extend(ldflags)
+        link.extend(['-o', target])
+        link.extend(self.objfiles)
+        for deps_key in self.deprules.keys():
+            deps = self.deprules[deps_key]
+            for dep in deps:
+                if isinstance(dep, CcLibraryRule):
+                    if dep.static == True:
+                        link.extend(dep.outputs)
+                    else:
+                        dirs = {}
+                        for out in dep.outputs:
+                            dirs[os.path.dirname(out)] = 1
+                        for d in dirs.keys():
+                            link.extend(['-L' + d])
+                        link.extend(['-l' + dep.name])
+                else:
+                    raise ValueError("Unsupported link dependency ('%s') of type %s" % (deps_key, type(dep).__name__))
+        fabricate.run([link])
 
 

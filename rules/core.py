@@ -2,10 +2,10 @@ import fabricate
 import os
 
 class BuildRule(object):
-    def __init__(self, module, name, *args, **kwargs):
+    def __init__(self, module, name, deps=[], *args, **kwargs):
         self.module = module
         self.name = name
-        self.deps = []
+        self.deps = deps
         self.outputs = []
         self.executed = False
 
