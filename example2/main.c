@@ -1,7 +1,5 @@
-
-extern int foo(void);
-extern int bar(void);
+#include "example/util.h"
 
 int main(int argc, char **argv) {
-  return foo() * bar();
+  return util_func();
 }

@@ -32,11 +32,8 @@ class CcRule(BuildRule):
         compile = [self.cc]
         compile.extend(["-I" + self.module.buildroot])
         compile.extend(self.cflags)
-        #compile.extend(self.ABI_CFLAGS[self.abi].split(" "))
         srcfile = os.path.join(self.indir, source)
         objfile = os.path.join(self.outdir, replace_ext(source, 'o'))
-        #if self.cflags is not None:
-        #    compile.extend(expand_make_vars(self.cflags, MAKE_VARS).split(" "))
         if not self.static:
             compile.append('-fpic')
         compile.extend(['-c', srcfile])
