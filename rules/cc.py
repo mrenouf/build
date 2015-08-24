@@ -20,8 +20,7 @@ class CcRule(BuildRule):
         self.abi = abi
 
     def init(self):
-        self.indir = os.path.relpath(self.module.buildroot + self.module.path)
-        self.outdir = os.path.relpath(self.module.buildroot + '/' + os.path.normpath(os.path.join('out' + self.module.path, self.name)))
+        super(CcRule, self).init()
         if self.abi is None:
             self.abi = os.environ['HOST_ABI']
         self.cc = '%s-gcc' % (self.abi)

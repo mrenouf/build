@@ -9,6 +9,10 @@ class BuildRule(object):
         self.outputs = []
         self.executed = False
 
+    def init(self):
+        self.indir = os.path.relpath(self.module.buildroot + self.module.path)
+        self.outroot = os.path.relpath(self.module.buildroot + '/out')
+        self.outdir = os.path.normpath(os.path.join(self.outroot + self.module.path, self.name))
 
     def mkdirs(self, path):
         # Uses a shell conditional so fabricate can see the target dir as an input
