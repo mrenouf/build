@@ -29,7 +29,7 @@ class CcRule(BuildRule):
 
     def compile(self, source):
         compile = [self.cc]
-        compile.extend(["-I" + self.module.buildroot])
+        compile.extend(["-I" + self.module.root])
         compile.extend(self.cflags)
         srcfile = os.path.join(self.indir, source)
         objfile = os.path.join(self.outdir, replace_ext(source, 'o'))

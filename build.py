@@ -14,7 +14,6 @@ import subprocess
 # Build rule classes
 from rules import RULE_CLASSES
 
-RE_MAKE_VAR = re.compile(r'\$\(([A-Za-z0-9_-]+)\)')
 RE_TARGET = re.compile(r'^(\/?(?:[0-9A-Za-z_]+)(?:(?:\/[0-9A-Za-z_]+)*))?(?:\:([0-9A-Za-z_]+))?$')
 
 # TODO, make these args of build.py
@@ -30,21 +29,15 @@ def get_gcc_target_machine(gcc='gcc'):
         print "Error: failed to identify machine type for toolchain: '%s': %s" % (gcc, e.message)
         raise e
 
+def find_buildroot(path=os.getcwd()):
+    while not os.path.isfile(os.path.join(path, "MODULAR")):
+        if path == "/":
+            return None
+        path = os.path.abspath(os.path.join(path, os.pardir))
+    return path
 
 HOST_ABI = get_gcc_target_machine('gcc')
-BUILDROOT = os.path.dirname(os.path.realpath(__file__))
-
-os.environ['BUILDROOT'] = BUILDROOT
 os.environ['HOST_ABI'] = HOST_ABI
-
-def expand_make_vars(text, values={}):
-    def repl(m):
-        try:
-            return values[m.group(1)]
-        except KeyError as e:
-            raise ValueError('Undefined variable "%s" in "%s"' % (m.group(1), text))
-    return RE_MAKE_VAR.sub(repl, text)
-
 
 def cross_tool(tool, cross):
     if cross is None:
@@ -55,12 +48,11 @@ def cross_tool(tool, cross):
 
 
 class Module(object):
-    def __init__(self, path, root=BUILDROOT):
+    def __init__(self, path, root):
         self.root = root
         self.path = path
         self.rules = {}
         self.eval_globals = {}
-        self.buildroot = BUILDROOT
 
         def make_call(module, classname, ruleclass):
             def call(name, *args, **kwargs):
@@ -79,7 +71,7 @@ class Module(object):
 
 
 def build():
-    eval_targets(build.targets)
+    eval_targets(build.targets, root=build.root, relpath=build.relpath)
 
 def parse_target_path_rule(target):
     m = RE_TARGET.match(target)
@@ -99,26 +91,30 @@ def abs_module_path(relpath, path):
         path = '/' + path
     return path
 
-def eval_targets(targets, relpath=None, modules={}, queue=[]):
+def eval_targets(targets, root, relpath=None, modules={}, queue=[]):
     for target in targets:
-        eval_target(target, relpath, modules, queue)
+        eval_target(target, root, relpath, modules, queue)
 
-def eval_target(target, relpath=None, modules={}, queue=[]):
+def eval_target(target, root, relpath=None, modules={}, queue=[]):
     path, rulename = parse_target_path_rule(target)
     path = abs_module_path(relpath, path)
     try:
         module = modules[path]
     except KeyError:
-        module = Module(path)
+        module = Module(path, root)
         try:
             module.parse()
         except IOError:
             raise ValueError('module %s does not exist' % (path))    
         modules[path] = module
-    if rulename is None or rulename is "" or rulename == "all":
+
+    if rulename is None:
+        rulename = os.path.basename(path)
+
+    if rulename == "all":
         deptargets = []
         for rule in module.rules.keys():
-            deptargets.extend(eval_target(':' + rule, path, modules, queue))
+            deptargets.extend(eval_target(':' + rule, root, path, modules, queue))
 	return deptargets
     else:
         try:
@@ -127,18 +123,28 @@ def eval_target(target, relpath=None, modules={}, queue=[]):
             raise ValueError('in %s: target %s could not be resolved' % (path + '/' + 'module', module.path + ':' + rulename))    
         # TODO: detect and abort on circular dependencies
         for dep in rule.deps:
-            deptargets = eval_target(dep, path, modules, queue)
+            deptargets = eval_target(dep, root, path, modules, queue)
             rule.deprules[dep] = deptargets
         rule.execute()
     return [rule]
 
+def module_relative_path(buildroot, path):
+    relpath = os.path.relpath(os.getcwd() + '/', buildroot)
+    if relpath == ".":
+        return None
+    return "/" + relpath
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('command', nargs=1)    
     parser.add_argument('targets', nargs='+')
     (options, args) = parser.parse_known_args()
     build.targets = options.targets
-    os.chdir(BUILDROOT)
+    build.root = find_buildroot()
+    if build.root is None:
+        raise AssertionError("Could not locate the buildroot")
+    build.relpath = module_relative_path(build.root, os.getcwd())
+    os.chdir(build.root)
     fabricate.main(default="build", build_dir=os.getcwd(), command_line=args)
-
 
 
