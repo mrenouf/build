@@ -16,28 +16,12 @@ from rules import RULE_CLASSES
 
 RE_TARGET = re.compile(r'^(\/?(?:[0-9A-Za-z_]+)(?:(?:\/[0-9A-Za-z_]+)*))?(?:\:([0-9A-Za-z_]+))?$')
 
-# TODO, make these args of build.py
-MAKE_VARS = {'AVR_CHIP': 'atmega328p', 'AVR_FREQ': '12000000'}
-
-def get_gcc_target_machine(gcc='gcc'):
-    try:
-        return subprocess.check_output([gcc, '-dumpmachine'], shell=False).strip()
-    except subprocess.CalledProcessError as e:
-        print "Error: failed to identify machine type for toolchain '%s': %s" % (gcc, e.message)
-        raise e
-    except OSError as e:
-        print "Error: failed to identify machine type for toolchain: '%s': %s" % (gcc, e.message)
-        raise e
-
 def find_buildroot(path=os.getcwd()):
     while not os.path.isfile(os.path.join(path, "MODULAR")):
         if path == "/":
             return None
         path = os.path.abspath(os.path.join(path, os.pardir))
     return path
-
-HOST_ABI = get_gcc_target_machine('gcc')
-os.environ['HOST_ABI'] = HOST_ABI
 
 def cross_tool(tool, cross):
     if cross is None:
@@ -146,5 +130,6 @@ if __name__=="__main__":
     build.relpath = module_relative_path(build.root, os.getcwd())
     os.chdir(build.root)
     fabricate.main(default="build", build_dir=os.getcwd(), command_line=args)
+
 
 

@@ -6,8 +6,21 @@ import os
 #from rules import register_rule
 from core import BuildRule
 from util import replace_ext
+import subprocess
+
+def get_gcc_target_machine():
+    try:
+        return subprocess.check_output(['gcc', '-dumpmachine'], shell=False).strip()
+    except subprocess.CalledProcessError as e:
+        print "Error: failed to identify machine type for toolchain '%s': %s" % (gcc, e.message)
+        raise e
+    except OSError as e:
+        print "Error: failed to identify machine type for toolchain: '%s': %s" % (gcc, e.message)
+        raise e
 
 class CcRule(BuildRule):
+    host_abi = get_gcc_target_machine()
+
     def __init__(self, module, name, static=False, abi=None, cflags=[], ldflags=[], deps=[], *args, **kwargs):
         super(CcRule, self).__init__(module, name, deps, *args, **kwargs)
         self.outputs = []
@@ -22,7 +35,7 @@ class CcRule(BuildRule):
     def init(self):
         super(CcRule, self).init()
         if self.abi is None:
-            self.abi = os.environ['HOST_ABI']
+            self.abi = self.host_abi
         self.cc = '%s-gcc' % (self.abi)
         self.ar = '%s-ar' % (self.abi)
         self.mkdirs(self.outdir)
