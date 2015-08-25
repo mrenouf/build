@@ -120,10 +120,11 @@ def module_relative_path(buildroot, path):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', nargs=1)    
-    parser.add_argument('targets', nargs='+')
+    # todo: add 'run' command to rules where applicable
+    #parser.add_argument('command', nargs=1, choices=['build','run'])
+    parser.add_argument('target', nargs='+')
     (options, args) = parser.parse_known_args()
-    build.targets = options.targets
+    build.targets = options.target
     build.root = find_buildroot()
     if build.root is None:
         raise AssertionError("Could not locate the buildroot")
