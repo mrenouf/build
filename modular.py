@@ -51,7 +51,7 @@ class Module(object):
 
     def parse(self):
         eval_locals = {}
-        execfile(self.root + '/' + self.path + '/' + 'module', self.eval_globals, eval_locals)
+        execfile(self.root + '/' + self.path + '/' + 'MODULE', self.eval_globals, eval_locals)
 
 
 def build():
@@ -104,7 +104,7 @@ def eval_target(target, root, relpath=None, modules={}, queue=[]):
         try:
             rule = module.rules[rulename]
         except KeyError:
-            raise ValueError('in %s: target %s could not be resolved' % (path + '/' + 'module', module.path + ':' + rulename))    
+            raise ValueError('in %s: target %s could not be resolved' % (path + '/' + 'MODULE', module.path + ':' + rulename))
         # TODO: detect and abort on circular dependencies
         for dep in rule.deps:
             deptargets = eval_target(dep, root, path, modules, queue)
